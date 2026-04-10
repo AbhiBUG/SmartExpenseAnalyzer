@@ -1,4 +1,6 @@
-﻿using System;
+﻿using SmartExpenseAnalyzer.Models;
+using SmartExpenseAnalyzer.Services;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -11,6 +13,7 @@ using System.Windows.Forms.DataVisualization.Charting;
 
 namespace SmartExpenseAnalyzer.UI
 {
+
     public partial class MainForm : Form
     {
         // ── Theme colors ──────────────────────────────────────────────────
@@ -43,6 +46,8 @@ namespace SmartExpenseAnalyzer.UI
         private ComboBox cmbCategory;
         private DateTimePicker dtpDate;
         private TextBox txtDescription;
+
+        private readonly ExpenseManager _expenseManager = new ExpenseManager();
 
         // ── Constructor ───────────────────────────────────────────────────
         public MainForm()
@@ -521,30 +526,55 @@ namespace SmartExpenseAnalyzer.UI
         // ══════════════════════════════════════════════════════════════════
         private void BtnSave_Click(object sender, EventArgs e)
         {
+            // ── Validation ────────────────────────────────────────────────────
             if (!double.TryParse(txtAmount.Text.Trim(), out double amount) || amount <= 0)
             {
-                MessageBox.Show("Please enter a valid positive amount.", "Validation",
+                MessageBox.Show("Please enter a valid amount.", "Invalid Input",
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtAmount.Focus();
                 return;
             }
 
-            _expenses.Add((
-                dtpDate.Value.ToString("dd/MM/yyyy"),
-                cmbCategory.SelectedItem?.ToString() ?? "Other",
-                amount,
-                txtDescription.Text.Trim()
-            ));
+            // ── Build Expense object ──────────────────────────────────────────
+            var expense = new Expense
+            {
+                Amount = amount,
+                Category = cmbCategory.SelectedItem.ToString(),
+                Date = dtpDate.Value,
+                Note = txtDescription.Text.Trim()
+            };
 
-            txtAmount.Clear();
-            txtDescription.Clear();
-            dtpDate.Value = DateTime.Today;
-            cmbCategory.SelectedIndex = 0;
+            // ── Save via ExpenseManager (MongoDB or JSON fallback) ────────────
+            try
+            {
+                _expenseManager.Add(expense);
 
-            LoadGrid();
-            UpdateAlerts();
-            UpdateCharts();
-            UpdateStatBoxes();
+                _expenses.Add((
+                    expense.Date.ToString("dd/MM/yyyy"),
+                    expense.Category,
+                    expense.Amount,
+                    expense.Note
+                ));
+
+                // ── Refresh UI ────────────────────────────────────────
+                UpdateStatBoxes();
+                UpdateAlerts();
+                UpdateCharts();
+
+                dgvHistory.DataSource = null;
+                dgvHistory.DataSource = _expenses
+                    .Select(x => new { x.Date, x.Category, x.Amount, x.Desc })
+                    .ToList();
+
+                txtAmount.Clear();
+                txtDescription.Clear();
+                cmbCategory.SelectedIndex = 0;
+                dtpDate.Value = DateTime.Today;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save expense:\n{ex.Message}", "Error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void LoadGrid()

@@ -1,4 +1,6 @@
-﻿using System;
+﻿using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,6 +11,8 @@ namespace SmartExpenseAnalyzer.Models
     public class Expense
     {
         /// <summary>Unique identifier for the expense.</summary>
+        [BsonId]
+        [BsonRepresentation(BsonType.String)]   // stores Guid as string in Mongo
         public Guid Id { get; set; } = Guid.NewGuid();
 
         /// <summary>Amount spent (in currency units).</summary>

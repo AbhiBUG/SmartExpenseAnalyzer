@@ -1,30 +1,29 @@
 ﻿// File: Services/ExpenseManager.cs
-// Handles loading, saving, and managing the list of expenses via JSON persistence.
-// Uses Newtonsoft.Json (Json.NET) for serialization.
+// Handles loading, saving, and managing the list of expenses.
+// Primary persistence: MongoDB. Fallback: JSON file.
 
-using Newtonsoft.Json;                // ← Newtonsoft.Json
+using Newtonsoft.Json;
 using SmartExpenseAnalyzer.Models;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
-using System.Xml;
 
 namespace SmartExpenseAnalyzer.Services
 {
     /// <summary>
-    /// Manages expense data: add, retrieve, persist (load/save) to JSON.
+    /// Manages expense data: add, retrieve, remove.
+    /// Uses MongoDB as the primary store and JSON as a local fallback.
     /// </summary>
     public class ExpenseManager
     {
-        // ── Configuration ────────────────────────────────────────────────────
-        // Path to the JSON data file. Stored in the application directory.
+        // ── MongoDB ───────────────────────────────────────────────────────────
+        private readonly MongoExpenseRepository _mongo;
+        private readonly bool _mongoAvailable;
+
+        // ── JSON Fallback ─────────────────────────────────────────────────────
         private readonly string _filePath;
 
-        // In-memory list of all expenses.
-        private List<Expense> _expenses;
-
-        // ── JSON settings ──────────────────────────────────────────────────────
-        // Newtonsoft.Json equivalent of JsonSerializerOptions.
         private static readonly JsonSerializerSettings _jsonSettings = new JsonSerializerSettings
         {
             Formatting = Newtonsoft.Json.Formatting.Indented,
@@ -32,23 +31,40 @@ namespace SmartExpenseAnalyzer.Services
             NullValueHandling = NullValueHandling.Ignore
         };
 
+        // ── In-memory cache ───────────────────────────────────────────────────
+        private List<Expense> _expenses;
+
         // ── Constructor ───────────────────────────────────────────────────────
         /// <summary>
-        /// Initialises the manager with an optional custom file path.
-        /// Automatically loads existing expenses from disk.
+        /// Initialises the manager.
+        /// Tries to connect to MongoDB first; falls back to JSON if unavailable.
         /// </summary>
-        /// <param name="filePath">Path to expenses.json (defaults to Data/expenses.json).</param>
-        public ExpenseManager(string filePath = "Data/expenses.json")
+        /// <param name="connectionString">MongoDB connection string.</param>
+        /// <param name="filePath">JSON fallback file path.</param>
+        public ExpenseManager(
+            string connectionString = "mongodb://localhost:27017",
+            string filePath = "Data/expenses.json")
         {
             _filePath = filePath;
             _expenses = new List<Expense>();
 
-            // Ensure the Data directory exists so saving never fails.
-            string directory = Path.GetDirectoryName(_filePath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
+            // ── Try MongoDB ───────────────────────────────────────────────────
+            try
+            {
+                _mongo = new MongoExpenseRepository(connectionString);
+                _expenses = _mongo.GetAll();
+                _mongoAvailable = true;
+                Debug.WriteLine("✅ MongoDB connected. Loaded expenses from MongoDB.");
+            }
+            catch (Exception ex)
+            {
+                _mongoAvailable = false;
+                Debug.WriteLine($"⚠️ MongoDB unavailable: {ex.Message}. Falling back to JSON.");
 
-            Load(); // Load saved expenses on startup.
+                // ── Fallback: JSON ────────────────────────────────────────────
+                EnsureDataDirectory();
+                LoadFromJson();
+            }
         }
 
         // ── Public API ────────────────────────────────────────────────────────
@@ -57,58 +73,78 @@ namespace SmartExpenseAnalyzer.Services
         public IReadOnlyList<Expense> GetAll() => _expenses.AsReadOnly();
 
         /// <summary>
-        /// Adds a new expense to the in-memory list and persists immediately.
+        /// Adds a new expense and persists it (MongoDB or JSON).
         /// </summary>
-        /// <param name="expense">The expense to add.</param>
         public void Add(Expense expense)
         {
             if (expense == null) throw new ArgumentNullException(nameof(expense));
-            _expenses.Add(expense);
-            Save(); // Auto-save after every addition.
+
+            if (_mongoAvailable)
+            {
+                _mongo.Add(expense);        // persist to MongoDB
+            }
+
+            _expenses.Add(expense);         // update in-memory cache
+
+            if (!_mongoAvailable)
+            {
+                SaveToJson();               // fallback: persist to JSON
+            }
         }
 
         /// <summary>
-        /// Removes an expense by its unique ID and persists the change.
+        /// Removes an expense by its unique GUID and persists the change.
         /// </summary>
-        /// <param name="id">The GUID of the expense to remove.</param>
-        /// <returns>True if an expense was removed; false if not found.</returns>
+        /// <returns>True if removed; false if not found.</returns>
         public bool Remove(Guid id)
         {
-            int removed = _expenses.RemoveAll(e => e.Id == id);
-            if (removed > 0) Save();
-            return removed > 0;
+            bool removed = false;
+
+            if (_mongoAvailable)
+            {
+                removed = _mongo.Remove(id);   // remove from MongoDB
+                if (removed)
+                    _expenses.RemoveAll(e => e.Id == id);
+            }
+            else
+            {
+                int count = _expenses.RemoveAll(e => e.Id == id);
+                removed = count > 0;
+                if (removed) SaveToJson();     // persist to JSON fallback
+            }
+
+            return removed;
         }
 
-        // ── Persistence ───────────────────────────────────────────────────────
+        // ── JSON Fallback Helpers ─────────────────────────────────────────────
 
-        /// <summary>Serialises the current list to JSON and writes it to disk.</summary>
-        public void Save()
+        private void EnsureDataDirectory()
         {
-            // JsonConvert.SerializeObject replaces JsonSerializer.Serialize
+            string dir = Path.GetDirectoryName(_filePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+        }
+
+        private void SaveToJson()
+        {
             string json = JsonConvert.SerializeObject(_expenses, _jsonSettings);
             File.WriteAllText(_filePath, json);
         }
 
-        /// <summary>
-        /// Reads the JSON file from disk and populates the in-memory list.
-        /// If the file doesn't exist or is corrupt, starts with an empty list.
-        /// </summary>
-        public void Load()
+        private void LoadFromJson()
         {
             if (!File.Exists(_filePath))
-                return; // No data yet — start fresh.
+                return;
 
             try
             {
                 string json = File.ReadAllText(_filePath);
-
-                // JsonConvert.DeserializeObject replaces JsonSerializer.Deserialize
-                _expenses = JsonConvert.DeserializeObject<List<Expense>>(json, _jsonSettings) ??new List<Expense>();
+                _expenses = JsonConvert.DeserializeObject<List<Expense>>(json, _jsonSettings)
+                              ?? new List<Expense>();
             }
             catch (Exception ex)
             {
-                // If deserialization fails (e.g., corrupt file), reset gracefully.
-                System.Diagnostics.Debug.WriteLine($"Failed to load expenses: {ex.Message}");
+                Debug.WriteLine($"❌ Failed to load JSON: {ex.Message}");
                 _expenses = new List<Expense>();
             }
         }
