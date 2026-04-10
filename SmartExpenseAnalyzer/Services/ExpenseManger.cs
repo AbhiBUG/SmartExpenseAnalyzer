@@ -27,7 +27,7 @@ namespace SmartExpenseAnalyzer.Services
         // Newtonsoft.Json equivalent of JsonSerializerOptions.
         private static readonly JsonSerializerSettings _jsonSettings = new JsonSerializerSettings
         {
-            Formatting = Formatting.Indented,  // Pretty-print JSON for readability
+            Formatting = Newtonsoft.Json.Formatting.Indented,
             DateFormatHandling = DateFormatHandling.IsoDateFormat,
             NullValueHandling = NullValueHandling.Ignore
         };
@@ -103,8 +103,7 @@ namespace SmartExpenseAnalyzer.Services
                 string json = File.ReadAllText(_filePath);
 
                 // JsonConvert.DeserializeObject replaces JsonSerializer.Deserialize
-                _expenses = JsonConvert.DeserializeObject<List<Expense>>(json, _jsonSettings)
-                             new List<Expense>();
+                _expenses = JsonConvert.DeserializeObject<List<Expense>>(json, _jsonSettings) ??new List<Expense>();
             }
             catch (Exception ex)
             {

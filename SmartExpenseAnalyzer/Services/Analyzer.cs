@@ -15,7 +15,7 @@ namespace SmartExpenseAnalyzer.Services
     {
         // ── Budget Thresholds ─────────────────────────────────────────────────
         // Fixed budget limits per category (in currency units).
-        private static readonly Dictionary<string, double> BudgetLimits = new()
+        private static readonly Dictionary<string, double> BudgetLimits = new Dictionary<string, double>()
         {
             { "Food",     5000 },
             { "Shopping", 3000 }

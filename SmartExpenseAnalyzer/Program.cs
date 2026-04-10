@@ -19,7 +19,7 @@ namespace SmartExpenseAnalyzer
             Application.SetCompatibleTextRenderingDefault(false);
 
             // Launch the main application window
-            Application.Run(new MainForm());
+            Application.Run(new SmartExpenseAnalyzer.UI.MainForm());
         }
 
     }
