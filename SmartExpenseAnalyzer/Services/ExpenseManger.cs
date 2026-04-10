@@ -44,7 +44,7 @@ namespace SmartExpenseAnalyzer.Services
             _expenses = new List<Expense>();
 
             // Ensure the Data directory exists so saving never fails.
-            string? directory = Path.GetDirectoryName(_filePath);
+            string directory = Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 Directory.CreateDirectory(directory);
 
@@ -104,7 +104,7 @@ namespace SmartExpenseAnalyzer.Services
 
                 // JsonConvert.DeserializeObject replaces JsonSerializer.Deserialize
                 _expenses = JsonConvert.DeserializeObject<List<Expense>>(json, _jsonSettings)
-                            ?? new List<Expense>();
+                             new List<Expense>();
             }
             catch (Exception ex)
             {
