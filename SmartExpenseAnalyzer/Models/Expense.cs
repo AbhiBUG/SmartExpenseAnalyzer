@@ -6,7 +6,21 @@ using System.Threading.Tasks;
 
 namespace SmartExpenseAnalyzer.Models
 {
-    internal class Expense
+    public class Expense
     {
+        /// <summary>Unique identifier for the expense.</summary>
+        public Guid Id { get; set; } = Guid.NewGuid();
+
+        /// <summary>Amount spent (in currency units).</summary>
+        public double Amount { get; set; }
+
+        /// <summary>Category of the expense (e.g., Food, Travel, Shopping, Bills).</summary>
+        public string Category { get; set; } = string.Empty;
+
+        /// <summary>Date when the expense occurred.</summary>
+        public DateTime Date { get; set; }
+
+        /// <summary>Optional note or description for the expense.</summary>
+        public string Note { get; set; } = string.Empty;
     }
 }
