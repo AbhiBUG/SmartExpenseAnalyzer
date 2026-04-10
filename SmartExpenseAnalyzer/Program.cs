@@ -14,9 +14,13 @@ namespace SmartExpenseAnalyzer
         [STAThread]
         static void Main()
         {
+            // Enable modern visual styles (rounded buttons, themed controls, etc.)
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+
+            // Launch the main application window
             Application.Run(new MainForm());
         }
+
     }
 }
