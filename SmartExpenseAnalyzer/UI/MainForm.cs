@@ -559,7 +559,7 @@ namespace SmartExpenseAnalyzer.UI
                 UpdateStatBoxes();
                 UpdateAlerts();
                 UpdateCharts();
-
+                LoadGrid();
                 dgvHistory.DataSource = null;
                 dgvHistory.DataSource = _expenses
                     .Select(x => new { x.Date, x.Category, x.Amount, x.Desc })
@@ -580,28 +580,26 @@ namespace SmartExpenseAnalyzer.UI
         private void LoadGrid()
         {
             if (dgvHistory == null) return;
-            dgvHistory.Rows.Clear();
 
+            // 1. Get filter values
             string catFilter = cmbFilterCat?.SelectedItem?.ToString() ?? "All Categories";
             string monthFilter = cmbFilterMonth?.SelectedItem?.ToString() ?? "All";
             string search = txtSearch?.Text?.Trim() ?? "";
 
-            double total = 0;
-            foreach (var exp in _expenses)
+            // 2. Filter the in-memory list using LINQ
+            var filteredList = _expenses.Where(exp =>
             {
                 bool passCat = catFilter == "All Categories" || exp.Category == catFilter;
 
                 bool passMonth = monthFilter == "All";
                 if (!passMonth)
                 {
-                    // Date stored as dd/MM/yyyy — month number is the middle segment
                     string[] parts = exp.Date.Split('/');
                     if (parts.Length == 3 && int.TryParse(parts[1], out int mNum))
                     {
                         string monthName = System.Globalization.CultureInfo.CurrentCulture
                                            .DateTimeFormat.GetMonthName(mNum);
-                        passMonth = string.Equals(monthName, monthFilter,
-                                                  StringComparison.OrdinalIgnoreCase);
+                        passMonth = string.Equals(monthName, monthFilter, StringComparison.OrdinalIgnoreCase);
                     }
                 }
 
@@ -609,24 +607,15 @@ namespace SmartExpenseAnalyzer.UI
                     || exp.Desc.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0
                     || exp.Category.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0;
 
-                if (!passCat || !passMonth || !passSearch) continue;
+                return passCat && passMonth && passSearch;
+            }).Select(x => new { x.Date, x.Category, x.Amount, x.Desc }).ToList();
 
-                int row = dgvHistory.Rows.Add(exp.Date, exp.Category, $"₹{exp.Amount:N0}", exp.Desc);
+            // 3. Update the Grid via DataSource (Fixes the InvalidOperationException)
+            dgvHistory.DataSource = null;
+            dgvHistory.DataSource = filteredList;
 
-                Color catColor;
-                if (exp.Category == "Food") catColor = Color.FromArgb(39, 174, 96);
-                else if (exp.Category == "Travel") catColor = Color.FromArgb(41, 128, 185);
-                else if (exp.Category == "Shopping") catColor = Color.FromArgb(142, 68, 173);
-                else if (exp.Category == "Bills") catColor = Color.FromArgb(231, 76, 60);
-                else catColor = Color.Black;
-
-                dgvHistory.Rows[row].Cells["Category"].Style.ForeColor = catColor;
-                dgvHistory.Rows[row].Cells["Category"].Style.Font =
-                    new Font("Segoe UI", 9f, FontStyle.Bold);
-
-                total += exp.Amount;
-            }
-
+            // 4. Update the Total Label
+            double total = filteredList.Sum(x => x.Amount);
             if (lblTotal != null)
                 lblTotal.Text = $"Total:   ₹{total:N0}";
         }
