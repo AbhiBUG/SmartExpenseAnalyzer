@@ -27,6 +27,7 @@ namespace SmartExpenseAnalyzer.Services
         /// <summary>Inserts a new expense document.</summary>
         public void Add(Expense expense)
         {
+            Console.WriteLine("add method called");
             if (expense == null) throw new ArgumentNullException(nameof(expense));
             _collection.InsertOne(expense);
         }
