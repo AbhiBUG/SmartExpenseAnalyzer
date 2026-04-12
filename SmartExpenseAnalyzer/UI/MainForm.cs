@@ -60,6 +60,7 @@ namespace SmartExpenseAnalyzer.UI
             this.MinimumSize = new Size(1024, 700);
 
             BuildUI();
+            LoadExpensesFromStorage();
 
             // Wire Resize so panels re-flow when user un-maximises
             this.Resize += (s, e) => RepositionPanels();
@@ -841,5 +842,34 @@ namespace SmartExpenseAnalyzer.UI
         }
 
         private void MainForm_Load(object sender, EventArgs e) { }
+
+        private void LoadExpensesFromStorage()
+        {
+            try
+            {
+                foreach (var exp in _expenseManager.GetAll())
+                {
+                    _expenses.Add((
+                        exp.Date.ToString("dd/MM/yyyy"),
+                        exp.Category,
+                        exp.Amount,
+                        exp.Note ?? ""
+                    ));
+                }
+
+                if (_expenses.Count > 0)
+                {
+                    UpdateStatBoxes();
+                    UpdateAlerts();
+                    UpdateCharts();
+                    LoadGrid();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not load saved expenses:\n{ex.Message}",
+                                "Load Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
     }
 }
